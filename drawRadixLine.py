@@ -1,52 +1,51 @@
-@mfunction("out")
-def drawRadixLine(_in=None, x=None, y=None, n=None):
+"""Draw radial light rays."""
 
-    # Summary - draw radix line on input image
+from __future__ import annotations
 
-    # preparation
-    fprintf(mstring('\\nDraw light line.\\n'))
-    [M, N] = size(_in)
-    lineData = zeros(4 * n, 3)
-    count = 0
+import math
 
-    # random line data (angle, dis, length)
-    p1 = randperm(90)
-    p2 = randperm(floor(50 * n))
-    p3 = randperm(M)
-    for i in mslice[1:4 * n]:
-        lineData(i, 1).lvalue = (p1(i) + floor((i - 1) / 4) * 90) * pi / 180
-        lineData(i, 2).lvalue = p2(i)
-        lineData(i, 3).lvalue = p3(i) + N
-        fprintf(mstring('%d: %d(%d) %d %d\\n'), i, lineData(i, 1), p1(i), lineData(i, 2), lineData(i, 3))
-        end
+import numpy as np
 
-        # draw line
-        for i in mslice[1:M]:
-            for j in mslice[1:N]:
-                newx = i - x
-                newy = j - y
-                angle = atan(newy / newx)
-                if (newx < 0):
-                    angle = angle + pi; print angle
 
-                elif (newy < 0):
-                    angle = angle + 2 * pi; print angle
+def draw_radix_line(mask: np.ndarray, x: int, y: int, n: int, seed: int | None = None) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    out = mask.copy()
+    h, w = out.shape[:2]
 
-                    end
-                    for k in mslice[1:4 * n]:
-                        v = abs(angle - lineData(k, 1))
-                        if (v < 0.01):
-                            d = norm(mcat([newx, newy]) - mcat([0, 0]))
-                            if (d > lineData(k, 2) and d < lineData(k, 2) + lineData(k, 3)):
-                                _in(i, j).lvalue = 1
-                                count = count + 1
-                                end
+    line_count = max(1, 4 * int(n))
+    p1 = rng.permutation(np.arange(1, 91))
+    p2_size = max(line_count, int(math.floor(50 * n)))
+    p2 = rng.permutation(np.arange(1, p2_size + 1))
+    p3 = rng.permutation(np.arange(1, h + 1))
 
-                                end
-                                end
-                                end
-                                end
-                                out = _in
-                                fprintf(mstring('%d %d count = %d\\n'), x, y, count)
+    line_data = np.zeros((line_count, 3), dtype=np.float32)
+    for i in range(line_count):
+        line_data[i, 0] = (p1[i % len(p1)] + (i // 4) * 90) * math.pi / 180.0
+        line_data[i, 1] = p2[i % len(p2)]
+        line_data[i, 2] = p3[i % len(p3)] + w
 
-                                end
+    for i in range(h):
+        for j in range(w):
+            newx = (i + 1) - x
+            newy = (j + 1) - y
+            if newx == 0:
+                angle = math.pi / 2 if newy >= 0 else 3 * math.pi / 2
+            else:
+                angle = math.atan(newy / newx)
+                if newx < 0:
+                    angle += math.pi
+                elif newy < 0:
+                    angle += 2 * math.pi
+
+            for k in range(line_count):
+                if abs(angle - line_data[k, 0]) < 0.01:
+                    d = math.hypot(newx, newy)
+                    if line_data[k, 1] < d < (line_data[k, 1] + line_data[k, 2]):
+                        out[i, j] = 1.0
+                        break
+
+    return out
+
+
+# Backward-compatible name
+drawRadixLine = draw_radix_line

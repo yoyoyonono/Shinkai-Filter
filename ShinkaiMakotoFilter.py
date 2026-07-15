@@ -1,70 +1,51 @@
-from ompc import 
+"""Main Shinkai-style image filtering pipeline."""
 
-@mfunction("light")
-def ShinkaiMakotoFilter(src=None, target=None, sky=None):
+from __future__ import annotations
 
-    # Summary - function version
+import cv2
+import numpy as np
 
-    # preparation
-    [M, N, C] = size(src)
+from addLight import add_light
+from adjustHSV import adjust_hsv
+from cf_reinhard import cf_reinhard
+from changeStyle import change_style
+from findSky import find_sky
+from pasteSky import paste_sky
 
-    # Step1: median filtering
-    fprintf(mstring('\\nStep1: median filtering\\n'))
-    blur = changeStyle(src, M * N)
 
-    # Step2: color transfer (guide)
-    fprintf(mstring('\\nStep2: color transfer\\n'))
+def shinkai_makoto_filter(
+    src: np.ndarray,
+    target: np.ndarray,
+    sky: np.ndarray,
+    light_x: int | None = None,
+    light_y: int | None = None,
+) -> dict[str, np.ndarray]:
+    """Run the full processing pipeline and return all step outputs."""
+    blur = change_style(src)
     color = cf_reinhard(blur, target)
+    adjust = adjust_hsv(color)
+    sky_mask, mask_threshold, mask_dilate, mask_erode = find_sky(src)
+    change_sky = paste_sky(adjust, sky, sky_mask)
+    light, light_filter = add_light(src, change_sky, light_x=light_x, light_y=light_y)
+    dst = cv2.GaussianBlur(light, (0, 0), 1.0)
+    dst = cv2.addWeighted(light, 1.8, dst, -0.8, 0)
 
-    # Step3: adjust (saturation, brightness)
-    fprintf(mstring('\\nStep3: adjust\\n'))
-    adjust = adjustHSV(color)
+    return {
+        "src": src,
+        "step1_median_filtering": blur,
+        "guide": target,
+        "step2_color_transfer": color,
+        "step3_adjust": adjust,
+        "step4_1_threshold": mask_threshold,
+        "step4_2_dilation": mask_dilate,
+        "step4_3_erosion": mask_erode,
+        "step4_3_sky_mask": sky_mask,
+        "step4_paste_sky": change_sky,
+        "step5_1_light_filter": light_filter,
+        "step5_add_light": light,
+        "step6_sharpening": dst,
+    }
 
-    # Step4: paste sky (sky)
-    fprintf(mstring('\\nStep4: paste sky\\n'))
-    [skyMask, mask_threshold, mask_dilate, mask_erode] = findSky(src)
-    changeSky = pasteSky(adjust, sky, skyMask)
 
-    # Step5: add light (light source)
-    fprintf(mstring('\\nStep5: add light\\n'))
-    [light, light_filter] = addLight(src, changeSky, M, N)
-
-    # show
-    figure()
-    imshow(src)
-    title(mstring('src'))
-    figure()
-    imshow(blur)
-    title(mstring('Step1: median filtering'))
-    figure()
-    imshow(target)
-    title(mstring('guide'))
-    figure()
-    imshow(color)
-    title(mstring('Step2: color transform'))
-    figure()
-    imshow(adjust)
-    title(mstring('Step3: adjust'))
-    figure()
-    imshow(mask_threshold)
-    title(mstring('Step4-1: threshold'))
-    figure()
-    imshow(mask_dilate)
-    title(mstring('Step4-2: dilation'))
-    figure()
-    imshow(mask_erode)
-    title(mstring('Step4-3: erosion'))
-    figure()
-    imshow(skyMask)
-    title(mstring('Step4-3: sky mask'))
-    figure()
-    imshow(changeSky)
-    title(mstring('Step4: paste sky'))
-    figure()
-    imshow(light_filter)
-    title(mstring('light filter'))
-    figure()
-    imshow(light)
-    title(mstring('Step5: add light'))
-
-    end
+# Backward-compatible name
+ShinkaiMakotoFilter = shinkai_makoto_filter

@@ -1,89 +1,50 @@
-#% preparation
-close("all")
-clear("all")
-clc
+"""CLI entrypoint for the Shinkai filter pipeline."""
 
-#% read image
-fprintf(mstring('Shinkai Makoto Filter START!\\nRead image.\\n'))
-src = im2double(imread(mstring('input/input5.jpg')))
-target = im2double(imread(mstring('guide/guide10.jpg')))
-sky = im2double(imread(mstring('sky.jpg')))
-[M, N, C] = size(src)
+from __future__ import annotations
 
-#% Step1: median filtering
-fprintf(mstring('\\nStep1: median filtering\\n'))
-blur = changeStyle(src, M * N)
+import argparse
+from pathlib import Path
 
-#% Step2: color transfer (guide)
-fprintf(mstring('\\nStep2: color transfer\\n'))
-#target = chooseGuide(src, M, N);
-color = cf_reinhard(blur, target)
+import cv2
 
-#% Step3: adjust (s,v)
-fprintf(mstring('\\nStep3: adjust\\n'))
-adjust = adjustHSV(color, src, M, N)
+from ShinkaiMakotoFilter import shinkai_makoto_filter
 
-#% Step4: paste sky (sky)
-fprintf(mstring('\\nStep4: paste sky\\n'))
-[skyMask, mask_threshold, mask_dilate, mask_erode] = findSky(src)
-changeSky = pasteSky(adjust, sky, skyMask)
 
-#% Step5: add light
-fprintf(mstring('\\nStep5: add light\\n'))
-[light, light_filter] = addLight(src, changeSky, M, N)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Shinkai Makoto filter pipeline.")
+    parser.add_argument("--src", required=True, help="Input source image path")
+    parser.add_argument("--target", required=True, help="Guide/target image path")
+    parser.add_argument("--sky", required=True, help="Sky texture image path")
+    parser.add_argument("--out-dir", default="output", help="Output directory")
+    parser.add_argument("--light-x", type=int, default=None, help="Optional light source X")
+    parser.add_argument("--light-y", type=int, default=None, help="Optional light source Y")
+    return parser.parse_args()
 
-#% Step6: sharpening
-dst = imsharpen(light)
 
-#% show
-figure()
-imshow(src)
-title(mstring('src'))
-figure()
-imshow(blur)
-title(mstring('Step1: median filtering'))
-figure()
-imshow(target)
-title(mstring('guide'))
-figure()
-imshow(color)
-title(mstring('Step2: color transform'))
-figure()
-imshow(adjust)
-title(mstring('Step3: adjust'))
-figure()
-imshow(mask_threshold)
-title(mstring('Step4-1: threshold'))
-figure()
-imshow(mask_dilate)
-title(mstring('Step4-2: dilation'))
-figure()
-imshow(mask_erode)
-title(mstring('Step4-3: erosion'))
-figure()
-imshow(skyMask)
-title(mstring('Step4-3: sky mask'))
-figure()
-imshow(changeSky)
-title(mstring('Step4: paste sky'))
-figure()
-imshow(light_filter)
-title(mstring('light filter'))
-figure()
-imshow(light)
-title(mstring('Step5: add light'))
-figure()
-imshow(dst)
-title(mstring('Step6: sharpening'))
+def _read_image(path: str) -> cv2.typing.MatLike:
+    image = cv2.imread(path, cv2.IMREAD_COLOR)
+    if image is None:
+        raise FileNotFoundError(f"Could not read image: {path}")
+    return image
 
-#% save
-imwrite(blur, mstring('Step1_median_filtering.jpg'))
-imwrite(color, mstring('Step2_color_transfer.jpg'))
-imwrite(adjust, mstring('Step3_adjust.jpg'))
-imwrite(mask_threshold, mstring('Step4-1_threshold.jpg'))
-imwrite(mask_dilate, mstring('Step4-2_dilation.jpg'))
-imwrite(mask_erode, mstring('Step4-3_erosion.jpg'))
-imwrite(changeSky, mstring('Step4_paste_sky.jpg'))
-imwrite(light_filter, mstring('Step5-1_light_filter.jpg'))
-imwrite(light, mstring('Step5_add_light.jpg'))
-imwrite(dst, mstring('Step6_sharpening.jpg'))
+
+def main() -> None:
+    args = parse_args()
+    src = _read_image(args.src)
+    target = _read_image(args.target)
+    sky = _read_image(args.sky)
+
+    outputs = shinkai_makoto_filter(src, target, sky, args.light_x, args.light_y)
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for name, image in outputs.items():
+        out_file = out_dir / f"{name}.jpg"
+        cv2.imwrite(str(out_file), image)
+
+    print(f"Saved {len(outputs)} images to {out_dir}")
+
+
+if __name__ == "__main__":
+    main()

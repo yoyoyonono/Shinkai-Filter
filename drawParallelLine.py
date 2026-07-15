@@ -1,41 +1,56 @@
-@mfunction("out")
-def drawParallelLine(_in=None, angle=None, n=None):
+"""Draw random parallel lines."""
 
-    # Summary - draw parallel line one the image
+from __future__ import annotations
 
-    # random line data
-    [M, N] = size(_in)
-    lineData = zeros(n, 3)
-    p1 = randperm(M)
-    p2 = randperm(N)
-    p3 = randperm(floor(M / 2))
-    for i in mslice[1:n]:
-        lineData(i, 1).lvalue = p1(i)
-        lineData(i, 2).lvalue = p2(i)
-        lineData(i, 3).lvalue = p3(i)
-        fprintf(mstring('%d: %d %d %d\\n'), i, lineData(i, 1), lineData(i, 2), lineData(i, 3))
-        end
+import math
 
-        # draw line
-        c = floor(N / 150)
-        b = 1
-        if angle < 0:
-            b = -1; print b
-            end
-            for i in mslice[1:M]:
-                for j in mslice[1:N]:
-                    for k in mslice[1:n]:
-                        for l in mslice[1:c]:
-                            deltax = i - (lineData(k, 1) - l)
-                            deltay = j - (lineData(k, 2) + l * b)
-                            thita = atan(deltay / deltax)
-                            if norm(thita - angle) < 0.01 and norm(mcat([i, j]) - mcat([(lineData(k, 1) - l), (lineData(k, 2) + l)])) < lineData(k, 3):
-                                _in(i, j).lvalue = 1
-                                end
-                                end
-                                end
-                                end
-                                end
-                                out = _in
+import numpy as np
 
-                                end
+
+def draw_parallel_line(mask: np.ndarray, angle: float, n: int, seed: int | None = None) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    out = mask.copy()
+    h, w = out.shape[:2]
+
+    n = max(1, int(n))
+    p1 = rng.permutation(np.arange(1, h + 1))
+    p2 = rng.permutation(np.arange(1, w + 1))
+    p3 = rng.permutation(np.arange(1, max(2, h // 2 + 1)))
+
+    line_data = np.zeros((n, 3), dtype=np.float32)
+    for i in range(n):
+        line_data[i, 0] = p1[i % len(p1)]
+        line_data[i, 1] = p2[i % len(p2)]
+        line_data[i, 2] = p3[i % len(p3)]
+
+    c = max(1, int(math.floor(w / 150)))
+    b = -1 if angle < 0 else 1
+
+    for i in range(h):
+        for j in range(w):
+            for k in range(n):
+                for l in range(1, c + 1):
+                    px = line_data[k, 0] - l
+                    py = line_data[k, 1] + l * b
+
+                    deltax = (i + 1) - px
+                    deltay = (j + 1) - py
+                    if deltax == 0:
+                        theta = math.pi / 2 if deltay >= 0 else -math.pi / 2
+                    else:
+                        theta = math.atan(deltay / deltax)
+
+                    if abs(theta - angle) < 0.01:
+                        if math.hypot((i + 1) - px, (j + 1) - py) < line_data[k, 2]:
+                            out[i, j] = 1.0
+                            break
+                if out[i, j] == 1.0:
+                    break
+            if out[i, j] == 1.0:
+                continue
+
+    return out
+
+
+# Backward-compatible name
+drawParallelLine = draw_parallel_line

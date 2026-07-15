@@ -1,64 +1,96 @@
-@mfunction("est_im")
-def cf_reinhard(source=None, target=None):
-    #CF_REINHARD computes Reinhard's image colour transfer
-    #
-    #   CF_REINHARD(SOURCE,TARGET) returns the colour transfered source
-    #   image SOURCE according to the target image TARGET.
-    #
+"""Color transfer utilities based on Reinhard et al."""
 
-    #   Copyright 2015 Han Gong <gong@fedoraproject.org>, University of East
-    #   Anglia.
+from __future__ import annotations
 
-    #   References:
-    # Erik Reinhard, Michael Ashikhmin, Bruce Gooch and Peter Shirley, 
-    # 'Color Transfer between Images', IEEE CG&A special issue on Appliedi
-    # Perception, Vol 21, No 5, pp 34-41, September - October 2001
+import numpy as np
 
-    [x, y, z] = size(source)
-    img_s = reshape(im2double(source), mcat([]), 3)
-    img_t = reshape(im2double(target), mcat([]), 3)
 
-    a = mcat([0.3811, 0.5783, 0.0402, OMPCSEMI, 0.1967, 0.7244, 0.0782, OMPCSEMI, 0.0241, 0.1288, 0.8444])
-    b = mcat([1 / sqrt(3), 0, 0, OMPCSEMI, 0, 1 / sqrt(6), 0, OMPCSEMI, 0, 0, 1 / sqrt(2)])
-    c = mcat([1, 1, 1, OMPCSEMI, 1, 1 - 2, OMPCSEMI, 1 - 1, 0])
-    b2 = mcat([sqrt(3) / 3, 0, 0, OMPCSEMI, 0, sqrt(6) / 6, 0, OMPCSEMI, 0, 0, sqrt(2) / 2])
-    c2 = mcat([1, 1, 1, OMPCSEMI, 1, 1 - 1, OMPCSEMI, 1 - 2, 0])
+def cf_reinhard(source: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """Transfer color statistics from target to source using the original LMS pipeline."""
+    src_rgb = source[..., ::-1].astype(np.float64) / 255.0
+    tgt_rgb = target[..., ::-1].astype(np.float64) / 255.0
 
-    img_s = max(img_s, 1 / 255)
-    img_t = max(img_t, 1 / 255)
+    img_s = src_rgb.reshape(-1, 3)
+    img_t = tgt_rgb.reshape(-1, 3)
 
-    # convert to LMS space
-    LMS_s = a * img_s.cT
-    LMS_t = a * img_t.cT
+    a = np.array(
+        [
+            [0.3811, 0.5783, 0.0402],
+            [0.1967, 0.7244, 0.0782],
+            [0.0241, 0.1288, 0.8444],
+        ],
+        dtype=np.float64,
+    )
+    b = np.array(
+        [
+            [1.0 / np.sqrt(3.0), 0.0, 0.0],
+            [0.0, 1.0 / np.sqrt(6.0), 0.0],
+            [0.0, 0.0, 1.0 / np.sqrt(2.0)],
+        ],
+        dtype=np.float64,
+    )
+    c = np.array(
+        [
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, -2.0],
+            [1.0, -1.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    b2 = np.array(
+        [
+            [np.sqrt(3.0) / 3.0, 0.0, 0.0],
+            [0.0, np.sqrt(6.0) / 6.0, 0.0],
+            [0.0, 0.0, np.sqrt(2.0) / 2.0],
+        ],
+        dtype=np.float64,
+    )
+    c2 = np.array(
+        [
+            [1.0, 1.0, 1.0],
+            [1.0, 1.0, -1.0],
+            [1.0, -2.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
 
-    # take the log of LMS
-    LMS_s = log10(LMS_s)
-    LMS_t = log10(LMS_t)
+    img_s = np.maximum(img_s, 1.0 / 255.0)
+    img_t = np.maximum(img_t, 1.0 / 255.0)
 
-    # convert to lab space
-    lab_s = b * c * LMS_s
-    lab_t = b * c * LMS_t
+    lms_s = a @ img_s.T
+    lms_t = a @ img_t.T
 
-    # compute mean and std
-    mean_s = mean(lab_s, 2)
-    std_s = std(lab_s, 0, 2)
-    mean_t = mean(lab_t, 2)
-    std_t = std(lab_t, 0, 2)
+    lms_s = np.log10(lms_s)
+    lms_t = np.log10(lms_t)
 
-    res_lab = zeros(3, x * y)
+    lab_s = b @ c @ lms_s
+    lab_t = b @ c @ lms_t
 
-    sf = std_t /eldiv/ std_s
+    mean_s = np.mean(lab_s, axis=1, keepdims=True)
+    std_s = np.std(lab_s, axis=1, keepdims=True)
+    mean_t = np.mean(lab_t, axis=1, keepdims=True)
+    std_t = np.std(lab_t, axis=1, keepdims=True)
 
-    for ch in mslice[1:3]:    # for each channel, apply the statistical alignment
-        res_lab(ch, mslice[:]).lvalue = (lab_s(ch, mslice[:]) - mean_s(ch)) * sf(ch) + mean_t(ch)
-        end
+    std_s = np.maximum(std_s, 1e-6)
+    scale = std_t / std_s
 
-        # convert back to LMS
-        LMS_res = c2 * b2 * res_lab
-        for ch in mslice[1:3]:
-            LMS_res(ch, mslice[:]).lvalue = 10. ** LMS_res(ch, mslice[:])
-            end
+    res_lab = (lab_s - mean_s) * scale + mean_t
 
-            # convert back to RGB
-            est_im = (mcat([4.4679 - 3.5873, 0.1193, OMPCSEMI, -1.2186, 2.3809 - 0.1624, OMPCSEMI, 0.0497 - 0.2439, 1.2045]) * LMS_res).cT
-            est_im = reshape(est_im, size(source))        # reshape the image
+    lms_res = c2 @ b2 @ res_lab
+    lms_res = np.power(10.0, lms_res)
+
+    rgb_from_lms = np.array(
+        [
+            [4.4679, -3.5873, 0.1193],
+            [-1.2186, 2.3809, -0.1624],
+            [0.0497, -0.2439, 1.2045],
+        ],
+        dtype=np.float64,
+    )
+
+    est_im = (rgb_from_lms @ lms_res).T
+    est_im = est_im.reshape(source.shape)
+    est_im = np.clip(est_im, 0.0, 1.0)
+
+    est_bgr = (est_im[..., ::-1] * 255.0).astype(np.uint8)
+    return est_bgr
