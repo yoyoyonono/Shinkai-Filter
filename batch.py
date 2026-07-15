@@ -1,31 +1,50 @@
-#% preparation
-close(mstring('all'))
-clear(mstring('all'))
-clc()
+"""Batch runner for input directory images."""
 
-#% choose sky & guide
-sky = im2double(imread(mstring('sky.jpg')))
-guide = im2double(imread(mstring('guide/guide10.jpg')))
-#% input
-input1 = im2double(imread(mstring('input/input1.jpg')))
-input2 = im2double(imread(mstring('input/input2.jpg')))
-input3 = im2double(imread(mstring('input/input3.jpg')))
-input4 = im2double(imread(mstring('input/input4.jpg')))
-input5 = im2double(imread(mstring('input/input5.jpg')))
-input6 = im2double(imread(mstring('input/input6.jpg')))
-input7 = im2double(imread(mstring('input/input7.jpg')))
-input8 = im2double(imread(mstring('input/input8.jpg')))
-input9 = im2double(imread(mstring('input/input9.jpg')))
-input10 = im2double(imread(mstring('input/input10.jpg')))
+from __future__ import annotations
 
-#% filtering
-output1 = ShinkaiMakotoFilter(input1, guide, sky)
-output2 = ShinkaiMakotoFilter(input2, guide, sky)
-output3 = ShinkaiMakotoFilter(input3, guide, sky)
-output4 = ShinkaiMakotoFilter(input4, guide, sky)
-output5 = ShinkaiMakotoFilter(input5, guide, sky)
-output6 = ShinkaiMakotoFilter(input6, guide, sky)
-output7 = ShinkaiMakotoFilter(input7, guide, sky)
-output8 = ShinkaiMakotoFilter(input8, guide, sky)
-output9 = ShinkaiMakotoFilter(input9, guide, sky)
-output10 = ShinkaiMakotoFilter(input10, guide, sky)
+import argparse
+from pathlib import Path
+
+import cv2
+
+from ShinkaiMakotoFilter import shinkai_makoto_filter
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Batch process images with the Shinkai filter.")
+    parser.add_argument("--input-dir", default="input", help="Directory containing source images")
+    parser.add_argument("--target", required=True, help="Guide/target image path")
+    parser.add_argument("--sky", required=True, help="Sky texture image path")
+    parser.add_argument("--out-dir", default="batch_output", help="Output directory")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    input_dir = Path(args.input_dir)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    target = cv2.imread(args.target, cv2.IMREAD_COLOR)
+    sky = cv2.imread(args.sky, cv2.IMREAD_COLOR)
+    if target is None:
+        raise FileNotFoundError(f"Could not read target image: {args.target}")
+    if sky is None:
+        raise FileNotFoundError(f"Could not read sky image: {args.sky}")
+
+    src_paths = sorted(list(input_dir.glob("*.jpg")) + list(input_dir.glob("*.jpeg")) + list(input_dir.glob("*.png")))
+    if not src_paths:
+        raise FileNotFoundError(f"No images found in {input_dir}")
+
+    for src_path in src_paths:
+        src = cv2.imread(str(src_path), cv2.IMREAD_COLOR)
+        if src is None:
+            continue
+        outputs = shinkai_makoto_filter(src, target, sky)
+        cv2.imwrite(str(out_dir / f"{src_path.stem}_final.jpg"), outputs["step6_sharpening"])
+
+    print(f"Processed {len(src_paths)} images into {out_dir}")
+
+
+if __name__ == "__main__":
+    main()

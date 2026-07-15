@@ -1,52 +1,28 @@
-@mfunction("out")
-def drawRadixLine(_in=None, x=None, y=None, n=None):
+"""Draw radial light rays."""
 
-    # Summary - draw radix line on input image
+from __future__ import annotations
 
-    # preparation
-    fprintf(mstring('\\nDraw light line.\\n'))
-    [M, N] = size(_in)
-    lineData = zeros(4 * n, 3)
-    count = 0
+import math
 
-    # random line data (angle, dis, length)
-    p1 = randperm(90)
-    p2 = randperm(floor(50 * n))
-    p3 = randperm(M)
-    for i in mslice[1:4 * n]:
-        lineData(i, 1).lvalue = (p1(i) + floor((i - 1) / 4) * 90) * pi / 180
-        lineData(i, 2).lvalue = p2(i)
-        lineData(i, 3).lvalue = p3(i) + N
-        fprintf(mstring('%d: %d(%d) %d %d\\n'), i, lineData(i, 1), p1(i), lineData(i, 2), lineData(i, 3))
-        end
+import cv2
+import numpy as np
 
-        # draw line
-        for i in mslice[1:M]:
-            for j in mslice[1:N]:
-                newx = i - x
-                newy = j - y
-                angle = atan(newy / newx)
-                if (newx < 0):
-                    angle = angle + pi; print angle
 
-                elif (newy < 0):
-                    angle = angle + 2 * pi; print angle
+def draw_radix_line(mask: np.ndarray, x: int, y: int, n: int, seed: int | None = None) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    out = mask.copy()
+    h, w = out.shape[:2]
+    max_len = int(math.hypot(h, w))
 
-                    end
-                    for k in mslice[1:4 * n]:
-                        v = abs(angle - lineData(k, 1))
-                        if (v < 0.01):
-                            d = norm(mcat([newx, newy]) - mcat([0, 0]))
-                            if (d > lineData(k, 2) and d < lineData(k, 2) + lineData(k, 3)):
-                                _in(i, j).lvalue = 1
-                                count = count + 1
-                                end
+    for _ in range(max(1, n * 4)):
+        angle = rng.uniform(0.0, 2.0 * math.pi)
+        length = rng.integers(max_len // 5, max_len)
+        x2 = int(x + math.cos(angle) * length)
+        y2 = int(y + math.sin(angle) * length)
+        cv2.line(out, (int(x), int(y)), (x2, y2), 1.0, thickness=1)
 
-                                end
-                                end
-                                end
-                                end
-                                out = _in
-                                fprintf(mstring('%d %d count = %d\\n'), x, y, count)
+    return out
 
-                                end
+
+# Backward-compatible name
+drawRadixLine = draw_radix_line

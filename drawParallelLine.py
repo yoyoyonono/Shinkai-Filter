@@ -1,41 +1,33 @@
-@mfunction("out")
-def drawParallelLine(_in=None, angle=None, n=None):
+"""Draw random parallel lines."""
 
-    # Summary - draw parallel line one the image
+from __future__ import annotations
 
-    # random line data
-    [M, N] = size(_in)
-    lineData = zeros(n, 3)
-    p1 = randperm(M)
-    p2 = randperm(N)
-    p3 = randperm(floor(M / 2))
-    for i in mslice[1:n]:
-        lineData(i, 1).lvalue = p1(i)
-        lineData(i, 2).lvalue = p2(i)
-        lineData(i, 3).lvalue = p3(i)
-        fprintf(mstring('%d: %d %d %d\\n'), i, lineData(i, 1), lineData(i, 2), lineData(i, 3))
-        end
+import math
 
-        # draw line
-        c = floor(N / 150)
-        b = 1
-        if angle < 0:
-            b = -1; print b
-            end
-            for i in mslice[1:M]:
-                for j in mslice[1:N]:
-                    for k in mslice[1:n]:
-                        for l in mslice[1:c]:
-                            deltax = i - (lineData(k, 1) - l)
-                            deltay = j - (lineData(k, 2) + l * b)
-                            thita = atan(deltay / deltax)
-                            if norm(thita - angle) < 0.01 and norm(mcat([i, j]) - mcat([(lineData(k, 1) - l), (lineData(k, 2) + l)])) < lineData(k, 3):
-                                _in(i, j).lvalue = 1
-                                end
-                                end
-                                end
-                                end
-                                end
-                                out = _in
+import cv2
+import numpy as np
 
-                                end
+
+def draw_parallel_line(mask: np.ndarray, angle: float, n: int, seed: int | None = None) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    out = mask.copy()
+    h, w = out.shape[:2]
+
+    dx = math.cos(angle)
+    dy = math.sin(angle)
+    nx = -dy
+    ny = dx
+
+    for _ in range(max(1, n * 2)):
+        offset = rng.uniform(-max(h, w), max(h, w))
+        cx = w / 2 + nx * offset
+        cy = h / 2 + ny * offset
+        p1 = (int(cx - dx * 2 * max(h, w)), int(cy - dy * 2 * max(h, w)))
+        p2 = (int(cx + dx * 2 * max(h, w)), int(cy + dy * 2 * max(h, w)))
+        cv2.line(out, p1, p2, 1.0, thickness=1)
+
+    return out
+
+
+# Backward-compatible name
+drawParallelLine = draw_parallel_line
