@@ -10,7 +10,7 @@ def paste_sky(image: np.ndarray, sky: np.ndarray, sky_mask: np.ndarray, alpha: f
     """Blend the sky image into masked sky pixels of the source image."""
     h, w = image.shape[:2]
     sky_resized = cv2.resize(sky, (w, h), interpolation=cv2.INTER_LINEAR)
-    mask = (sky_mask > 0)[..., None]
+    mask = sky_mask > 0
 
     out = image.astype(np.float32).copy()
     sky_float = sky_resized.astype(np.float32)
