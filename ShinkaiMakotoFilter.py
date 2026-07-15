@@ -28,7 +28,7 @@ def shinkai_makoto_filter(
     change_sky = paste_sky(adjust, sky, sky_mask)
     light, light_filter = add_light(src, change_sky, light_x=light_x, light_y=light_y)
     dst = cv2.GaussianBlur(light, (0, 0), 1.0)
-    dst = cv2.addWeighted(light, 1.5, dst, -0.5, 0)
+    dst = cv2.addWeighted(light, 1.8, dst, -0.8, 0)
 
     return {
         "src": src,
@@ -39,7 +39,7 @@ def shinkai_makoto_filter(
         "step4_1_threshold": mask_threshold,
         "step4_2_dilation": mask_dilate,
         "step4_3_erosion": mask_erode,
-        "step4_4_sky_mask": sky_mask,
+        "step4_3_sky_mask": sky_mask,
         "step4_paste_sky": change_sky,
         "step5_1_light_filter": light_filter,
         "step5_add_light": light,
